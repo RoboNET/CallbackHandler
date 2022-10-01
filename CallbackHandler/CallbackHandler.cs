@@ -1,12 +1,11 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
-using StackExchange.Redis;
 
-namespace BackgroundTask;
+namespace CallbackHandler;
 
-public class CallbackHandler<T>
+public class CallbackHandler<T> : ICallbackHandler
 {
-    private readonly ISubscriber _redis;
+    private readonly IMessageBroadcaster _broadcaster;
+    private readonly Configuration _configuration;
 
     private ConcurrentDictionary<string, TaskCompletionSource<T>> _callbacks =
         new();
@@ -16,17 +15,14 @@ public class CallbackHandler<T>
     private ConcurrentQueue<(DateTime, string)> _waitingResultCache =
         new();
 
-    public CallbackHandler(IConnectionMultiplexer redis)
+    public CallbackHandler(IMessageBroadcaster broadcaster, Configuration configuration)
     {
-        _redis = redis.GetSubscriber();
-        _redis.Subscribe(typeof(T).Name, (channel, value) =>
-        {
-            var result = JsonSerializer.Deserialize<MultiplexerResult<T>>(value);
-            InternalSetResult(result.Id, result.Data);
-        });
+        _broadcaster = broadcaster;
+        _configuration = configuration;
+        _broadcaster.Subscribe((string id, T message) => { InternalSetResult(id, message); });
     }
 
-    public async Task<T> WaitResult(string id)
+    public async Task<T> WaitResult(string id, CancellationToken cancellationToken = default, TimeSpan? timeout = null)
     {
         if (_waitingResults.TryGetValue(id, out var data))
         {
@@ -35,26 +31,48 @@ public class CallbackHandler<T>
 
         var tcs = new TaskCompletionSource<T>();
         _callbacks.TryAdd(id, tcs);
-        var result = await tcs.Task;
-        return result;
+
+        if (cancellationToken.CanBeCanceled)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            cancellationToken.Register(() =>
+            {
+                _callbacks.TryRemove(id, out _);
+                tcs.SetCanceled(cancellationToken);
+            });
+        }
+
+        if (timeout != null)
+        {
+            using var cts = new CancellationTokenSource(timeout.Value);
+            cts.Token.Register(() =>
+            {
+                _callbacks.TryRemove(id, out _);
+                tcs.SetCanceled(cts.Token);
+            });
+            var result = await tcs.Task;
+            _callbacks.TryRemove(id, out _);
+            return result;
+        }
+        else
+        {
+            var result = await tcs.Task;
+            _callbacks.TryRemove(id, out _);
+            return result;
+        }
     }
 
     public async Task SetResult(string id, T data)
     {
         if (_callbacks.TryGetValue(id, out var tcs))
         {
-            tcs.SetResult(data);
+            Task.Run(() => tcs.SetResult(data));
         }
         else
         {
             _waitingResults.TryAdd(id, data);
             _waitingResultCache.Enqueue((DateTime.UtcNow, id));
-
-            await _redis.PublishAsync(typeof(T).Name, JsonSerializer.Serialize(new MultiplexerResult<T>()
-            {
-                Id = id,
-                Data = data
-            }));
+            await _broadcaster.BroadcastMessageAsync(id, data);
         }
     }
 
@@ -63,7 +81,7 @@ public class CallbackHandler<T>
     {
         if (_callbacks.TryGetValue(id, out var tcs))
         {
-            tcs.SetResult(data);
+            Task.Run(() => tcs.SetResult(data));
         }
         else
         {
@@ -95,4 +113,11 @@ public class CallbackHandler<T>
             }
         }
     }
+
+    public Type Type => typeof(T);
+}
+
+public interface ICallbackHandler
+{
+    public Type Type { get; }
 }
