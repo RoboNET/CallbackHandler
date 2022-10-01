@@ -1,0 +1,39 @@
+name: .NET
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v0.9.7
+      with:
+          versionSpec: '5.x'
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Determine Version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v0.9.7
+      with:
+          useConfigFile: true
+          configFilePath: .github/GitVersion.yml  
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 6.0.x
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build --no-restore --configuration Release /p:Version=${{ steps.gitversion.outputs.AssemblySemVer }} /p:AssemblyVersion=${{ steps.gitversion.outputs.AssemblySemVer }} /p:InformationalVersion=${{ steps.gitversion.outputs.InformationalVersion }}
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
+    - name: Package nuget
+      run: dotnet pack ApiResponse.sln --configuration Release -o:package /p:PackageVersion=${{ steps.gitversion.outputs.AssemblySemVer }}
+    - name: Push generated package to GitHub registry
+      run: dotnet nuget push ./package/*.nupkg  --source https://nuget.pkg.github.com/threenine/index.json --api-key ${{ github.token }}
