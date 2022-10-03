@@ -36,14 +36,3 @@ public class CallbackHandlerConfigurationBuilder
         return new CallbackHandlerConfiguration(_cacheDuration, _cacheHandler);
     }
 }
-
-public interface ICacheHandler
-{
-    Type Type { get; }
-}
-
-public interface ICacheHandler<T> : ICacheHandler
-{
-    Task<T> GetResult(string id);
-    Type ICacheHandler.Type => typeof(T);
-}
