@@ -1,11 +1,16 @@
 using System.Collections.Concurrent;
+using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CallbackHandler;
 
 public class CallbackHandler<T> : ICallbackHandler
 {
     private readonly IMessageBroadcaster _broadcaster;
-    private readonly Configuration _configuration;
+    private readonly CallbackHandlerConfiguration _configuration;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly MethodInfo? _cacheMethodInfo;
+    private readonly PropertyInfo? _cacheMethodInfoResult;
 
     private ConcurrentDictionary<string, TaskCompletionSource<T>> _callbacks =
         new();
@@ -15,11 +20,18 @@ public class CallbackHandler<T> : ICallbackHandler
     private ConcurrentQueue<(DateTime, string)> _waitingResultCache =
         new();
 
-    public CallbackHandler(IMessageBroadcaster broadcaster, Configuration configuration)
+    public CallbackHandler(IMessageBroadcaster broadcaster, CallbackHandlerConfiguration configuration,
+        IServiceProvider serviceProvider)
     {
         _broadcaster = broadcaster;
         _configuration = configuration;
+        _serviceProvider = serviceProvider;
         _broadcaster.Subscribe((string id, T message) => { InternalSetResult(id, message); });
+        if (configuration.CacheHandler != null)
+        {
+            _cacheMethodInfo = configuration.CacheHandler.GetMethod("GetResult");
+            _cacheMethodInfoResult = _cacheMethodInfo.ReturnType.GetProperty("Result");
+        }
     }
 
     public async Task<T> WaitResult(string id, CancellationToken cancellationToken = default, TimeSpan? timeout = null)
@@ -27,6 +39,14 @@ public class CallbackHandler<T> : ICallbackHandler
         if (_waitingResults.TryGetValue(id, out var data))
         {
             return data;
+        }
+
+        if (_cacheMethodInfo != null)
+        {
+            var cacheHandler = _serviceProvider.GetRequiredService(_configuration.CacheHandler);
+            var task = ((Task) _cacheMethodInfo.Invoke(cacheHandler, new object?[] {id}));
+            await task.ConfigureAwait(false);
+            return (T)_cacheMethodInfoResult.GetValue(task);
         }
 
         var tcs = new TaskCompletionSource<T>();
@@ -50,7 +70,7 @@ public class CallbackHandler<T> : ICallbackHandler
                 _callbacks.TryRemove(id, out _);
                 tcs.SetCanceled(cts.Token);
             });
-            var result = await tcs.Task;
+            var result = await tcs.Task.ConfigureAwait(false);
             _callbacks.TryRemove(id, out _);
             return result;
         }
@@ -64,6 +84,7 @@ public class CallbackHandler<T> : ICallbackHandler
 
     public async Task SetResult(string id, T data)
     {
+        RemoveOldCache();
         if (_callbacks.TryGetValue(id, out var tcs))
         {
             Task.Run(() => tcs.SetResult(data));
@@ -79,6 +100,7 @@ public class CallbackHandler<T> : ICallbackHandler
 
     private void InternalSetResult(string id, T data)
     {
+        RemoveOldCache();
         if (_callbacks.TryGetValue(id, out var tcs))
         {
             Task.Run(() => tcs.SetResult(data));
