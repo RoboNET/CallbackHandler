@@ -122,7 +122,7 @@ public class CallbackHandler<T> : ICallbackHandler
                 {
                     if (item.Item2 != item2.Item2)
                     {
-                        //Какой-то пиздец
+                        //Something went wrong
                         break;
                     }
 
