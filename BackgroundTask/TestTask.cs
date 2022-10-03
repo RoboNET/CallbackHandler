@@ -17,6 +17,10 @@ public class TestTask
 
     public async Task Process(string id)
     {
+        try
+        {
+
+       
         //make auth request
         await Task.Delay(10000);
         var authResult = await _authHandler.WaitResult(id);
@@ -33,6 +37,11 @@ public class TestTask
             throw new Exception("пизда 2");
         }
 
-        Interlocked.Increment(ref Result);
+        Interlocked.Increment(ref Result); }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
 }

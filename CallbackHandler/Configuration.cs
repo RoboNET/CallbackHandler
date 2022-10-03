@@ -1,3 +1,5 @@
 namespace CallbackHandler;
 
-public record Configuration(List<Type> Types);
+public record Configuration(Dictionary<Type, CallbackHandlerConfiguration> Types);
+
+public record CallbackHandlerConfiguration(TimeSpan CacheDuration, Type? CacheHandler = null);
