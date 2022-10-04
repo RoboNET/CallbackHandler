@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BackgroundTask", "Backgroun
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CallbackHandler", "CallbackHandler\CallbackHandler.csproj", "{35302B31-0A3D-4847-8023-CBF6B43CABE7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CallbackHandler.Redis", "CallbackHandler.Redis\CallbackHandler.Redis.csproj", "{B3F47B2A-8669-4064-B521-0E518A054F43}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{35302B31-0A3D-4847-8023-CBF6B43CABE7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{35302B31-0A3D-4847-8023-CBF6B43CABE7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{35302B31-0A3D-4847-8023-CBF6B43CABE7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B3F47B2A-8669-4064-B521-0E518A054F43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B3F47B2A-8669-4064-B521-0E518A054F43}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B3F47B2A-8669-4064-B521-0E518A054F43}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B3F47B2A-8669-4064-B521-0E518A054F43}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
